@@ -1,0 +1,54 @@
+name: "IaC"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/manifest.yml
+      - 'manifests/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/manifest.yml
+      - 'manifests/**'
+
+jobs:
+  iac:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./manifest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::202062340677:role/TechChallengeInfraDeployer
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Update kubeconfig
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: aws eks update-kubeconfig --name ${{ vars.AWS_EKS_CLUSTER_NAME }} --region ${{ vars.AWS_REGION }}
+
+      - name: Deploy to EKS
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          kubectl apply -f manifests/postgres-pv.yml
+          kubectl apply -f manifests/postgres-pvc.yml
+          kubectl apply -f manifests/postgres-secret.yml
+          kubectl apply -f manifests/postgres-deployment.yml
+          kubectl apply -f manifests/postgres-svc.yml
+          kubectl apply -f manifests/self-order-management-secret.yml
+          kubectl apply -f manifests/self-order-management-hpa.yml
+          kubectl apply -f manifests/self-order-management-load-balancer.yml
+          kubectl apply -f manifests/self-order-management-deployment.yml
+          kubectl apply -f manifests/self-order-management-svc.yml
