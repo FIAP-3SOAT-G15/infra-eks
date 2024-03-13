@@ -1,4 +1,4 @@
-name: "IaC"
+name: "Manifest"
 
 on:
   push:
@@ -15,11 +15,11 @@ on:
       - 'manifests/**'
 
 jobs:
-  iac:
+  manifest:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./manifest
+        working-directory: ./manifests
     permissions:
       id-token: write
       contents: read
