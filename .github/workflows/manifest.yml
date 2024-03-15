@@ -42,13 +42,13 @@ jobs:
       - name: Deploy to EKS
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
-          kubectl apply -f manifests/postgres-pv.yml
-          kubectl apply -f manifests/postgres-pvc.yml
-          kubectl apply -f manifests/postgres-secret.yml
-          kubectl apply -f manifests/postgres-deployment.yml
-          kubectl apply -f manifests/postgres-svc.yml
-          kubectl apply -f manifests/self-order-management-secret.yml
-          kubectl apply -f manifests/self-order-management-hpa.yml
-          kubectl apply -f manifests/self-order-management-load-balancer.yml
-          kubectl apply -f manifests/self-order-management-deployment.yml
-          kubectl apply -f manifests/self-order-management-svc.yml
+          kubectl apply -f postgres-pv.yml
+          kubectl apply -f postgres-pvc.yml
+          kubectl apply -f postgres-secret.yml
+          kubectl apply -f postgres-deployment.yml
+          kubectl apply -f postgres-svc.yml
+          kubectl apply -f self-order-management-secret.yml
+          kubectl apply -f self-order-management-hpa.yml
+          kubectl apply -f self-order-management-load-balancer.yml
+          kubectl apply -f self-order-management-deployment.yml
+          kubectl apply -f self-order-management-svc.yml
