@@ -1,21 +1,21 @@
-name: "Cluster"
+name: "Provisioning"
 
 on:
   push:
     branches:
       - main
     paths:
-      - .github/workflows/cluster.yml
+      - .github/workflows/provisioning.yml
       - 'terraform/**'
   pull_request:
     branches:
       - main
     paths:
-      - .github/workflows/cluster.yml
+      - .github/workflows/provisioning.yml
       - 'terraform/**'
 
 jobs:
-  cluster:
+  provisioning:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -32,7 +32,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::202062340677:role/TechChallengeInfraDeployer
+          role-to-assume: arn:aws:iam::202062340677:role/TechChallengeEKSDeployer
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Setup Terraform
@@ -62,5 +62,5 @@ jobs:
         run: exit 1
 
       - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        #if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve -input=false
