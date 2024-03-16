@@ -1,15 +1,30 @@
+locals {
+  cluster_name = "tech-challenge"
+  cluster_version = "1.29"
+}
+
+data "terraform_remote_state" "tech-challenge" {
+  backend = "s3"
+
+  config = {
+    bucket = "fiap-3soat-g15-infra-tech-challenge-state"
+    key    = "live/terraform.tfstate"
+    region = var.region
+  }
+}
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "18.29.0"
 
-  cluster_name    = "fiap-3soat-g15"
-  cluster_version = "1.29"
+  cluster_name    = local.cluster_name
+  cluster_version = local.cluster_version
 
   cluster_endpoint_private_access = true
   cluster_endpoint_public_access  = true
 
-  vpc_id     = module.vpc.vpc_id
-  subnet_ids = module.vpc.private_subnets
+  vpc_id     = data.terraform_remote_state.tech-challenge.outputs.vpc_id
+  subnet_ids = data.terraform_remote_state.tech-challenge.outputs.private_subnets
 
   enable_irsa = true
 
@@ -21,7 +36,7 @@ module "eks" {
     general = {
       desired_size = 2
       min_size     = 1
-      max_size     = 10
+      max_size     = 5
 
       labels = {
         role = "general"
@@ -38,8 +53,8 @@ module "eks" {
 
   aws_auth_roles = [
     {
-      rolearn  = module.eks_admins_iam_role.iam_role_arn
-      username = module.eks_admins_iam_role.iam_role_name
+      rolearn  = module.eks_admin_iam_role.iam_role_arn
+      username = module.eks_admin_iam_role.iam_role_name
       groups   = ["system:masters"]
     },
   ]
@@ -74,7 +89,7 @@ module "allow_eks_access_iam_policy" {
   })
 }
 
-module "eks_admins_iam_role" {
+module "eks_admin_iam_role" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-assumable-role"
   version = "5.3.1"
 
@@ -89,7 +104,7 @@ module "eks_admins_iam_role" {
   ]
 }
 
-module "allow_assume_eks_admins_iam_policy" {
+module "allow_assume_eks_admin_iam_policy" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-policy"
   version = "5.3.1"
 
@@ -104,13 +119,13 @@ module "allow_assume_eks_admins_iam_policy" {
           "sts:AssumeRole",
         ]
         Effect   = "Allow"
-        Resource = module.eks_admins_iam_role.iam_role_arn
+        Resource = module.eks_admin_iam_role.iam_role_arn
       },
     ]
   })
 }
 
-module "eks_admins_iam_group" {
+module "eks_admin_iam_group" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-group-with-policies"
   version = "5.3.1"
 
@@ -118,5 +133,5 @@ module "eks_admins_iam_group" {
   attach_iam_self_management_policy = false
   create_group                      = true
   group_users                       = []
-  custom_group_policy_arns          = [module.allow_assume_eks_admins_iam_policy.arn]
+  custom_group_policy_arns          = [module.allow_assume_eks_admin_iam_policy.arn]
 }
