@@ -34,7 +34,7 @@ module "eks" {
 
   # when destroying de cluster, first turn this flag to false and apply
   # then, remove the cluster
-  manage_aws_auth_configmap = true
+  manage_aws_auth_configmap = false
 
   aws_auth_roles = [
     {
