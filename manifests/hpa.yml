@@ -1,7 +1,8 @@
-apiVersion: autoscaling/v2
+apiVersion: autoscaling/v1
 kind: HorizontalPodAutoscaler
 metadata:
   name: self-order-management
+  namespace: selfordermanagement
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -9,10 +10,4 @@ spec:
     name: self-order-management
   minReplicas: 1
   maxReplicas: 4
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 30
+  targetCPUUtilizationPercentage: 50

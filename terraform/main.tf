@@ -1,6 +1,9 @@
 locals {
-  cluster_name = "tech-challenge"
+  name            = "selfordermanagementcluster"
   cluster_version = "1.29"
+
+  namespace            = "selfordermanagement"
+  service_account_name = "self-order-management-sa"
 }
 
 data "terraform_remote_state" "tech-challenge" {
@@ -13,125 +16,118 @@ data "terraform_remote_state" "tech-challenge" {
   }
 }
 
+data "terraform_remote_state" "rds" {
+  backend = "s3"
+
+  config = {
+    bucket = "fiap-3soat-g15-infra-db-state"
+    key    = "live/terraform.tfstate"
+    region = var.region
+  }
+}
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "18.29.0"
+  version = "20.8.3"
 
-  cluster_name    = local.cluster_name
-  cluster_version = local.cluster_version
-
+  cluster_name                    = local.name
+  cluster_version                 = local.cluster_version
   cluster_endpoint_private_access = true
   cluster_endpoint_public_access  = true
+
+  enable_cluster_creator_admin_permissions = true
 
   vpc_id     = data.terraform_remote_state.tech-challenge.outputs.vpc_id
   subnet_ids = data.terraform_remote_state.tech-challenge.outputs.private_subnets
 
-  enable_irsa = true
-
   eks_managed_node_group_defaults = {
-    disk_size = 20
+    disk_size      = 20
+    instance_types = ["t3.small"]
   }
 
   eks_managed_node_groups = {
-    general = {
+    default_node_group = {
+      use_custom_launch_template = false
+
       desired_size = 2
       min_size     = 1
       max_size     = 5
 
-      labels = {
-        role = "general"
-      }
-
-      instance_types = ["t3.small"]
-      capacity_type  = "ON_DEMAND"
+      capacity_type = "ON_DEMAND"
     }
   }
+}
 
-  # when destroying de cluster, first turn this flag to false and apply
-  # then, remove the cluster
-  manage_aws_auth_configmap = true
+# AWS Secrets and Configuration Provider (ASCP)
+# https://docs.aws.amazon.com/secretsmanager/latest/userguide/integrating_csi_driver.html#integrating_csi_driver_install
 
-  aws_auth_roles = [
-    {
-      rolearn  = module.eks_admin_iam_role.iam_role_arn
-      username = module.eks_admin_iam_role.iam_role_name
-      groups   = ["system:masters"]
-    },
+resource "helm_release" "csi-secrets-store" {
+  name       = "csi-secrets-store"
+  repository = "https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts"
+  chart      = "secrets-store-csi-driver"
+  namespace  = "kube-system"
+
+  set {
+    name  = "syncSecret.enabled"
+    value = "true"
+  }
+
+  set {
+    name  = "enableSecretRotation"
+    value = "true"
+  }
+
+  depends_on = [
+    module.eks
   ]
 }
 
-data "aws_eks_cluster" "default" {
-  name = module.eks.cluster_id
+resource "helm_release" "secrets-provider-aws" {
+  name       = "secrets-provider-aws"
+  repository = "https://aws.github.io/secrets-store-csi-driver-provider-aws"
+  chart      = "secrets-store-csi-driver-provider-aws"
+  namespace  = "kube-system"
+
+  depends_on = [
+    module.eks,
+    helm_release.csi-secrets-store
+  ]
 }
 
-data "aws_eks_cluster_auth" "default" {
-  name = module.eks.cluster_id
-}
+resource "aws_iam_role" "service_account_role" {
+  name = "SelfOrderManagementServiceAccount"
 
-module "allow_eks_access_iam_policy" {
-  source  = "terraform-aws-modules/iam/aws//modules/iam-policy"
-  version = "5.3.1"
-
-  name          = "allow-eks-access"
-  create_policy = true
-
-  policy = jsonencode({
+  assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Action = [
-          "eks:*",
-        ]
-        Effect   = "Allow"
-        Resource = "*"
+        Effect = "Allow"
+        Principal = {
+          Federated = module.eks.oidc_provider_arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "${module.eks.oidc_provider}:aud" : "sts.amazonaws.com",
+            "${module.eks.oidc_provider}:sub" : "system:serviceaccount:${local.namespace}:${local.service_account_name}"
+          }
+        }
       },
     ]
   })
 }
 
-module "eks_admin_iam_role" {
-  source  = "terraform-aws-modules/iam/aws//modules/iam-assumable-role"
-  version = "5.3.1"
-
-  role_name         = "eks-admin"
-  create_role       = true
-  role_requires_mfa = false
-
-  custom_role_policy_arns = [module.allow_eks_access_iam_policy.arn]
-
-  trusted_role_arns = [
-    "arn:aws:iam::${var.account_id}:root"
-  ]
+resource "aws_iam_role_policy_attachment" "rds_secrets_read_only_for_service_account" {
+  role       = aws_iam_role.service_account_role.name
+  policy_arn = data.terraform_remote_state.rds.outputs.rds_secrets_read_only_policy_arn
 }
 
-module "allow_assume_eks_admin_iam_policy" {
-  source  = "terraform-aws-modules/iam/aws//modules/iam-policy"
-  version = "5.3.1"
-
-  name          = "allow-assume-eks-admin-iam-role"
-  create_policy = true
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = [
-          "sts:AssumeRole",
-        ]
-        Effect   = "Allow"
-        Resource = module.eks_admin_iam_role.iam_role_arn
-      },
-    ]
-  })
+resource "aws_iam_role_policy_attachment" "rds_params_read_only_for_service_account" {
+  role       = aws_iam_role.service_account_role.name
+  policy_arn = data.terraform_remote_state.rds.outputs.rds_params_read_only_policy_arn
 }
 
-module "eks_admin_iam_group" {
-  source  = "terraform-aws-modules/iam/aws//modules/iam-group-with-policies"
-  version = "5.3.1"
-
-  name                              = "eks-admin"
-  attach_iam_self_management_policy = false
-  create_group                      = true
-  group_users                       = []
-  custom_group_policy_arns          = [module.allow_assume_eks_admin_iam_policy.arn]
+resource "aws_iam_role_policy_attachment" "mercado_pago_secrets_read_only_for_service_account" {
+  role       = aws_iam_role.service_account_role.name
+  policy_arn = data.terraform_remote_state.tech-challenge.outputs.mercado_pago_secrets_read_only_policy_arn
 }
