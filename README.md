@@ -10,8 +10,9 @@ Cluster do Elastic Kubernetes Service (EKS), com adição de [AWS Secrets and Co
 
 ## Dependências
 
-- Secrets (username e password) e parâmetros (endpoint e nome do BD) do RDS
-- Secrets da integração com o Mercado Pago
+- VPC e as subnets privadas
+- Secrets (username e password) no SecretsManager e parâmetros (endpoint e nome do BD) no SSM Parameter Store para o RDS
+- Secrets da integração com o Mercado Pago no SecretsManager
 
 Essas dependências são criadas nos outros repositórios de infraestrutura da organização e são utilizadas neste repositório através [remote state como data source](https://developer.hashicorp.com/terraform/language/state/remote-state-data).
 
