@@ -82,6 +82,8 @@ spec:
                 secretKeyRef:
                   name: db-secrets
                   key: password
+            - name: ADMIN_ACCESS_TOKEN
+              value: token
             - name: MP_TOKEN
               valueFrom:
                 secretKeyRef:
