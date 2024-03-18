@@ -1,10 +1,11 @@
 locals {
-  name            = "selfordermanagementcluster"
-  cluster_version = "1.29"
-
-  namespace            = "selfordermanagement"
-  service_account_name = "self-order-management-sa"
+  name                 = "tech-challenge"
+  cluster_version      = "1.29"
+  namespace            = "tech-challenge"
+  service_account_name = "tech-challenge-service-account"
 }
+
+data "aws_caller_identity" "current" {}
 
 data "terraform_remote_state" "tech-challenge" {
   backend = "s3"
@@ -35,6 +36,22 @@ module "eks" {
   cluster_endpoint_private_access = true
   cluster_endpoint_public_access  = true
 
+  access_entries = {
+    root_admin = {
+      kubernetes_groups = []
+      principal_arn     = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+
+      policy_associations = {
+        admin = {
+          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = {
+            type = "cluster"
+          }
+        }
+      }
+    }
+  }
+
   enable_cluster_creator_admin_permissions = true
 
   vpc_id     = data.terraform_remote_state.tech-challenge.outputs.vpc_id
@@ -53,15 +70,26 @@ module "eks" {
       min_size     = 1
       max_size     = 5
 
-      capacity_type = "ON_DEMAND"
+      capacity_type = "SPOT"
     }
   }
 }
 
-# AWS Secrets and Configuration Provider (ASCP)
-# https://docs.aws.amazon.com/secretsmanager/latest/userguide/integrating_csi_driver.html#integrating_csi_driver_install
+# Creating as Terraform resource (instead of Kubernetes manifest)
+# for removing Kubernetes services (like load balancers) when destroying it
+resource "kubernetes_namespace" "namespace" {
+  metadata {
+    name = local.namespace
 
-resource "helm_release" "csi-secrets-store" {
+    annotations = {
+      name = local.namespace
+    }
+  }
+}
+
+# Install AWS Secrets and Configuration Provider (ASCP)
+# https://docs.aws.amazon.com/secretsmanager/latest/userguide/integrating_csi_driver.html
+resource "helm_release" "csi_secrets_store" {
   name       = "csi-secrets-store"
   repository = "https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts"
   chart      = "secrets-store-csi-driver"
@@ -82,7 +110,7 @@ resource "helm_release" "csi-secrets-store" {
   ]
 }
 
-resource "helm_release" "secrets-provider-aws" {
+resource "helm_release" "secrets_provider_aws" {
   name       = "secrets-provider-aws"
   repository = "https://aws.github.io/secrets-store-csi-driver-provider-aws"
   chart      = "secrets-store-csi-driver-provider-aws"
@@ -90,44 +118,109 @@ resource "helm_release" "secrets-provider-aws" {
 
   depends_on = [
     module.eks,
-    helm_release.csi-secrets-store
+    helm_release.csi_secrets_store
   ]
 }
 
-resource "aws_iam_role" "service_account_role" {
-  name = "SelfOrderManagementServiceAccount"
+# Install AWS Load Balancer Controller
+# https://docs.aws.amazon.com/eks/latest/userguide/aws-load-balancer-controller.html
+# https://github.com/aws/eks-charts/tree/master/stable/aws-load-balancer-controller
+resource "helm_release" "aws_load_balancer_controller" {
+  name       = "aws-load-balancer-controller"
+  repository = "https://aws.github.io/eks-charts"
+  chart      = "aws-load-balancer-controller"
+  namespace  = "kube-system"
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Federated = module.eks.oidc_provider_arn
-        }
-        Action = "sts:AssumeRoleWithWebIdentity"
-        Condition = {
-          StringEquals = {
-            "${module.eks.oidc_provider}:aud" : "sts.amazonaws.com",
-            "${module.eks.oidc_provider}:sub" : "system:serviceaccount:${local.namespace}:${local.service_account_name}"
-          }
-        }
-      },
-    ]
-  })
+  set {
+    name  = "region"
+    value = var.region
+  }
+
+  set {
+    name  = "vpcId"
+    value = data.terraform_remote_state.tech-challenge.outputs.vpc_id
+  }
+
+  set {
+    name  = "clusterName"
+    value = local.name
+  }
+
+  set {
+    name  = "serviceAccount.create"
+    value = false
+  }
+
+  set {
+    name  = "serviceAccount.name"
+    value = local.service_account_name
+  }
+
+  depends_on = [
+    module.eks,
+    kubernetes_namespace.namespace
+  ]
 }
 
-resource "aws_iam_role_policy_attachment" "rds_secrets_read_only_for_service_account" {
-  role       = aws_iam_role.service_account_role.name
-  policy_arn = data.terraform_remote_state.rds.outputs.rds_secrets_read_only_policy_arn
+module "eks_service_account_role" {
+  source = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+
+  role_name = "TechChallengeEKSServiceAccount"
+
+  attach_load_balancer_controller_policy = true
+
+  oidc_providers = {
+    main = {
+      provider_arn = module.eks.oidc_provider_arn
+      namespace_service_accounts = [
+        "${local.namespace}:${local.service_account_name}",
+        "kube-system:${local.service_account_name}",
+      ]
+    }
+  }
+
+  role_policy_arns = {
+    RDSSecretsReadOnlyPolicy = data.terraform_remote_state.rds.outputs.rds_secrets_read_only_policy_arn
+    RDSParamsReadOnlyPolicy  = data.terraform_remote_state.rds.outputs.rds_params_read_only_policy_arn
+    MPSecretsReadOnlyPolicy  = data.terraform_remote_state.tech-challenge.outputs.mercado_pago_secrets_read_only_policy_arn
+  }
+
+  depends_on = [
+    module.eks,
+    kubernetes_namespace.namespace
+  ]
+
+  tags = var.tags
 }
 
-resource "aws_iam_role_policy_attachment" "rds_params_read_only_for_service_account" {
-  role       = aws_iam_role.service_account_role.name
-  policy_arn = data.terraform_remote_state.rds.outputs.rds_params_read_only_policy_arn
+resource "kubernetes_service_account" "kube_system_service_account" {
+  metadata {
+    name      = local.service_account_name
+    namespace = "kube-system"
+
+    annotations = {
+      "eks.amazonaws.com/role-arn" = module.eks_service_account_role.iam_role_arn
+    }
+  }
+
+  depends_on = [
+    module.eks,
+    module.eks_service_account_role
+  ]
 }
 
-resource "aws_iam_role_policy_attachment" "mercado_pago_secrets_read_only_for_service_account" {
-  role       = aws_iam_role.service_account_role.name
-  policy_arn = data.terraform_remote_state.tech-challenge.outputs.mercado_pago_secrets_read_only_policy_arn
+resource "kubernetes_service_account" "namespace_service_account" {
+  metadata {
+    name      = local.service_account_name
+    namespace = local.namespace
+
+    annotations = {
+      "eks.amazonaws.com/role-arn" = module.eks_service_account_role.iam_role_arn
+    }
+  }
+
+  depends_on = [
+    module.eks,
+    module.eks_service_account_role
+  ]
 }

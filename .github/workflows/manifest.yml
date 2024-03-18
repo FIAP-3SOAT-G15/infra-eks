@@ -42,10 +42,8 @@ jobs:
       - name: Deploy to EKS
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
-          kubectl apply -f namespace.yml
-          kubectl apply -f service-account.yml
           kubectl apply -f secret-provider.yml
           kubectl apply -f hpa.yml
-          kubectl apply -f load-balancer.yml
           kubectl apply -f deployment.yml
           kubectl apply -f service.yml
+          kubectl apply -f load-balancer.yml
