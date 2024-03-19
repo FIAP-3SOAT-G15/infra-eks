@@ -84,6 +84,8 @@ spec:
                   key: password
             - name: ADMIN_ACCESS_TOKEN
               value: token
+            - name: MOCK_PAYMENT_PROVIDER
+              value: "true"
             - name: MP_TOKEN
               valueFrom:
                 secretKeyRef:
