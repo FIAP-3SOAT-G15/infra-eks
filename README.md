@@ -33,7 +33,7 @@ Essas dependências são criadas nos outros repositórios de infraestrutura da o
 Para usar o kubectl, atualize o kubeconfig:
 
 ```bash
-aws eks update-kubeconfig --name selfordermanagementcluster --region us-east-1 --profile my-profile
+aws eks update-kubeconfig --name tech-challenge --region us-east-1 --profile my-profile
 ```
 
 Considerando o profile definido em `~/.aws/credentials`:
