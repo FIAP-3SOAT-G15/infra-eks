@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-deployment
+  namespace: orders
+  labels:
+    app: orders
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orders
+  template:
+    metadata:
+      namespace: orders
+      labels:
+        app: orders
+    spec:
+      serviceAccountName: orders-service-account
+      volumes:
+        - name: secrets-store-inline
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: orders-aws-secrets
+      containers:
+        - name: orders
+          image: 202062340677.dkr.ecr.us-east-1.amazonaws.com/fiap-3soat-g15-orders-api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: "100m"
+            limits:
+              cpu: "200m"
+          volumeMounts:
+            - name: secrets-store-inline
+              mountPath: "/mnt/secrets-store"
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            periodSeconds: 30
+            failureThreshold: 10
+            initialDelaySeconds: 20
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            periodSeconds: 30
+            failureThreshold: 10
+            initialDelaySeconds: 20
+            timeoutSeconds: 5
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: live
+            - name: DB_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: orders-db-secrets
+                  key: endpoint
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: orders-db-secrets
+                  key: name
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: orders-db-secrets
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: orders-db-secrets
+                  key: password
+            - name: ADMIN_ACCESS_TOKEN
+              value: token
+            - name: STOCK_SERVICE_URL
+              value: http://stock.stock
+            - name: PAYMENTS_SERVICE_URL
+              value: http://payments.payments

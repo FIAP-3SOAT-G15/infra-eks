@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments-deployment
+  namespace: payments
+  labels:
+    app: payments
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payments
+  template:
+    metadata:
+      namespace: payments
+      labels:
+        app: payments
+    spec:
+      serviceAccountName: payments-service-account
+      volumes:
+        - name: secrets-store-inline
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: payments-aws-secrets
+      containers:
+        - name: payments
+          image: 202062340677.dkr.ecr.us-east-1.amazonaws.com/fiap-3soat-g15-payments-api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8082
+          resources:
+            requests:
+              cpu: "100m"
+            limits:
+              cpu: "200m"
+          volumeMounts:
+            - name: secrets-store-inline
+              mountPath: "/mnt/secrets-store"
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            periodSeconds: 30
+            failureThreshold: 10
+            initialDelaySeconds: 20
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            periodSeconds: 30
+            failureThreshold: 10
+            initialDelaySeconds: 20
+            timeoutSeconds: 5
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: live
+            - name: ADMIN_ACCESS_TOKEN
+              value: token
+            - name: MOCK_PAYMENT_PROVIDER
+              value: "true"
+            - name: MP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: payments-mercado-pago-secrets
+                  key: token
+            - name: MP_USER_ID
+              valueFrom:
+                secretKeyRef:
+                  name: payments-mercado-pago-secrets
+                  key: userId
+            - name: MP_POS_ID
+              valueFrom:
+                secretKeyRef:
+                  name: payments-mercado-pago-secrets
+                  key: posId
+            - name: MP_WEBHOOK_BASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: payments-mercado-pago-secrets
+                  key: webhookBaseUrl
+            - name: ORDERS_SERVICE_URL
+              value: http://orders.orders
