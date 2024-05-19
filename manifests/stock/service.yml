@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: stock-service
+  namespace: stock
+  labels:
+    app: stock
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-name: stock-load-balancer
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: instance
+spec:
+  type: LoadBalancer
+  selector:
+    app: stock
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8081

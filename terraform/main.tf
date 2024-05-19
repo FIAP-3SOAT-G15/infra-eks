@@ -1,8 +1,9 @@
 locals {
-  name                 = "tech-challenge"
-  cluster_version      = "1.29"
-  namespace            = "tech-challenge"
-  service_account_name = "tech-challenge-service-account"
+  name               = "tech-challenge"
+  cluster_version    = "1.29"
+  orders_namespace   = "orders"
+  payments_namespace = "payments"
+  stock_namespace    = "stock"
 }
 
 data "aws_caller_identity" "current" {}
@@ -11,22 +12,45 @@ data "terraform_remote_state" "tech-challenge" {
   backend = "s3"
 
   config = {
-    bucket = "fiap-3soat-g15-infra-tech-challenge-state"
+    bucket = "fiap-3soat-g15-iac-tech-challenge"
     key    = "live/terraform.tfstate"
     region = var.region
   }
 }
 
-data "terraform_remote_state" "rds" {
+data "terraform_remote_state" "stock-api" {
   backend = "s3"
 
   config = {
-    bucket = "fiap-3soat-g15-infra-db-state"
+    bucket = "fiap-3soat-g15-iac-stock-api"
     key    = "live/terraform.tfstate"
     region = var.region
   }
 }
 
+data "terraform_remote_state" "payments-api" {
+  backend = "s3"
+
+  config = {
+    bucket = "fiap-3soat-g15-iac-payments-api"
+    key    = "live/terraform.tfstate"
+    region = var.region
+  }
+}
+
+data "terraform_remote_state" "orders-api" {
+  backend = "s3"
+
+  config = {
+    bucket = "fiap-3soat-g15-iac-orders-api"
+    key    = "live/terraform.tfstate"
+    region = var.region
+  }
+}
+
+# CLUSTER
+
+// https://github.com/terraform-aws-modules/terraform-aws-eks
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "20.8.3"
@@ -73,19 +97,47 @@ module "eks" {
       capacity_type = "SPOT"
     }
   }
-}
-
-# Creating as Terraform resource (instead of Kubernetes manifest)
-# for removing Kubernetes services (like load balancers) when destroying it
-resource "kubernetes_namespace" "namespace" {
-  metadata {
-    name = local.namespace
-
-    annotations = {
-      name = local.namespace
+  
+  cluster_addons = {
+    // Service Discovery
+    coredns = {
+      most_recent = true
     }
   }
 }
+
+# NAMESPACES
+
+# Creating as Terraform resource (instead of Kubernetes manifest)
+# for removing Kubernetes services (like load balancers) when destroying it
+resource "kubernetes_namespace" "orders-namespace" {
+  metadata {
+    name = "orders"
+    annotations = {
+      name = "orders"
+    }
+  }
+}
+
+resource "kubernetes_namespace" "payments-namespace" {
+  metadata {
+    name = "payments"
+    annotations = {
+      name = "payments"
+    }
+  }
+}
+
+resource "kubernetes_namespace" "stock-namespace" {
+  metadata {
+    name = "stock"
+    annotations = {
+      name = "stock"
+    }
+  }
+}
+
+# ADD-ONS
 
 # Install AWS Secrets and Configuration Provider (ASCP)
 # https://docs.aws.amazon.com/secretsmanager/latest/userguide/integrating_csi_driver.html
@@ -153,74 +205,131 @@ resource "helm_release" "aws_load_balancer_controller" {
 
   set {
     name  = "serviceAccount.name"
-    value = local.service_account_name
+    value = "kube-system-service-account"
   }
-
-  depends_on = [
-    module.eks,
-    kubernetes_namespace.namespace
-  ]
 }
 
-module "eks_service_account_role" {
-  source = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+# ROLES ATTACHED TO SERVICE ACCOUNTS
 
-  role_name = "TechChallengeEKSServiceAccount"
-
-  attach_load_balancer_controller_policy = true
+module "kube_system_service_account_role" {
+  source    = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  role_name = "TechChallengeKubeSystemServiceAccount"
 
   oidc_providers = {
     main = {
       provider_arn = module.eks.oidc_provider_arn
       namespace_service_accounts = [
-        "${local.namespace}:${local.service_account_name}",
-        "kube-system:${local.service_account_name}",
+        "kube-system:kube-system-service-account",
+      ]
+    }
+  }
+
+  attach_load_balancer_controller_policy = true
+
+  tags = var.tags
+}
+
+module "orders_service_account_role" {
+  source    = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  role_name = "TechChallengeOrdersServiceAccount"
+
+  oidc_providers = {
+    main = {
+      provider_arn = module.eks.oidc_provider_arn
+      namespace_service_accounts = [
+        "${local.orders_namespace}:${local.orders_namespace}-service-account",
       ]
     }
   }
 
   role_policy_arns = {
-    RDSSecretsReadOnlyPolicy = data.terraform_remote_state.rds.outputs.rds_secrets_read_only_policy_arn
-    RDSParamsReadOnlyPolicy  = data.terraform_remote_state.rds.outputs.rds_params_read_only_policy_arn
-    MPSecretsReadOnlyPolicy  = data.terraform_remote_state.tech-challenge.outputs.mercado_pago_secrets_read_only_policy_arn
+    OrdersRDSSecretsReadOnlyPolicy = data.terraform_remote_state.orders-api.outputs.rds_secrets_read_only_policy_arn
+    OrdersRDSParamsReadOnlyPolicy  = data.terraform_remote_state.orders-api.outputs.rds_params_read_only_policy_arn
   }
-
-  depends_on = [
-    module.eks,
-    kubernetes_namespace.namespace
-  ]
 
   tags = var.tags
 }
 
-resource "kubernetes_service_account" "kube_system_service_account" {
-  metadata {
-    name      = local.service_account_name
-    namespace = "kube-system"
+module "payments_service_account_role" {
+  source    = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  role_name = "TechChallengePaymentsServiceAccount"
 
-    annotations = {
-      "eks.amazonaws.com/role-arn" = module.eks_service_account_role.iam_role_arn
+  oidc_providers = {
+    main = {
+      provider_arn = module.eks.oidc_provider_arn
+      namespace_service_accounts = [
+        "${local.payments_namespace}:${local.payments_namespace}-service-account",
+      ]
     }
   }
 
-  depends_on = [
-    module.eks,
-    module.eks_service_account_role
-  ]
+  role_policy_arns = {
+    PaymentsDynamoDBTablePolicy = data.terraform_remote_state.payments-api.outputs.payments_dynamodb_table_policy_arn
+    MercadoPagoSecretsReadOnlyPolicy = data.terraform_remote_state.payments-api.outputs.mercado_pago_secrets_read_only_policy_arn
+  }
+
+  tags = var.tags
 }
 
-resource "kubernetes_service_account" "namespace_service_account" {
-  metadata {
-    name      = local.service_account_name
-    namespace = local.namespace
+module "stock_service_account_role" {
+  source    = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  role_name = "TechChallengeStockServiceAccount"
 
-    annotations = {
-      "eks.amazonaws.com/role-arn" = module.eks_service_account_role.iam_role_arn
+  oidc_providers = {
+    main = {
+      provider_arn = module.eks.oidc_provider_arn
+      namespace_service_accounts = [
+        "${local.stock_namespace}:${local.stock_namespace}-service-account",
+      ]
     }
   }
 
-  depends_on = [
-    module.eks,
-    module.eks_service_account_role
-  ]
+  role_policy_arns = {
+    StockRDSSecretsReadOnlyPolicy = data.terraform_remote_state.stock-api.outputs.rds_secrets_read_only_policy_arn
+    StockRDSParamsReadOnlyPolicy  = data.terraform_remote_state.stock-api.outputs.rds_params_read_only_policy_arn
+  }
+
+  tags = var.tags
+}
+
+# SERVICE ACCOUNTS
+
+resource "kubernetes_service_account" "kube_system_service_account" {
+  metadata {
+    name      = "kube-system-service-account"
+    namespace = "kube-system"
+    annotations = {
+      "eks.amazonaws.com/role-arn" = module.kube_system_service_account_role.iam_role_arn
+    }
+  }
+}
+
+resource "kubernetes_service_account" "orders_service_account" {
+  metadata {
+    name      = "${local.orders_namespace}-service-account"
+    namespace = local.orders_namespace
+    annotations = {
+      "eks.amazonaws.com/role-arn" = module.orders_service_account_role.iam_role_arn
+    }
+  }
+}
+
+resource "kubernetes_service_account" "payments_service_account" {
+  metadata {
+    name      = "${local.payments_namespace}-service-account"
+    namespace = local.payments_namespace
+    annotations = {
+      "eks.amazonaws.com/role-arn" = module.payments_service_account_role.iam_role_arn
+    }
+  }
+}
+
+resource "kubernetes_service_account" "stock_service_account" {
+  metadata {
+    name      = "${local.stock_namespace}-service-account"
+    namespace = local.stock_namespace
+    annotations = {
+      "eks.amazonaws.com/role-arn" = module.stock_service_account_role.iam_role_arn
+    }
+  }
 }

@@ -9,7 +9,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket = "fiap-3soat-g15-infra-eks-state"
+    bucket = "fiap-3soat-g15-iac-eks"
     key    = "live/terraform.tfstate"
     region = "us-east-1"
   }
