@@ -106,37 +106,6 @@ module "eks" {
   }
 }
 
-# NAMESPACES
-
-# Creating as Terraform resource (instead of Kubernetes manifest)
-# for removing Kubernetes services (like load balancers) when destroying it
-resource "kubernetes_namespace" "orders-namespace" {
-  metadata {
-    name = "orders"
-    annotations = {
-      name = "orders"
-    }
-  }
-}
-
-resource "kubernetes_namespace" "payments-namespace" {
-  metadata {
-    name = "payments"
-    annotations = {
-      name = "payments"
-    }
-  }
-}
-
-resource "kubernetes_namespace" "stock-namespace" {
-  metadata {
-    name = "stock"
-    annotations = {
-      name = "stock"
-    }
-  }
-}
-
 # ADD-ONS
 
 # Install AWS Secrets and Configuration Provider (ASCP)
@@ -243,8 +212,8 @@ module "orders_service_account_role" {
   }
 
   role_policy_arns = {
-    OrdersRDSSecretsReadOnlyPolicy = data.terraform_remote_state.orders-api.outputs.rds_secrets_read_only_policy_arn
-    OrdersRDSParamsReadOnlyPolicy  = data.terraform_remote_state.orders-api.outputs.rds_params_read_only_policy_arn
+    //OrdersRDSSecretsReadOnlyPolicy = data.terraform_remote_state.orders-api.outputs.rds_secrets_read_only_policy_arn
+    //OrdersRDSParamsReadOnlyPolicy  = data.terraform_remote_state.orders-api.outputs.rds_params_read_only_policy_arn
   }
 
   tags = var.tags
@@ -264,8 +233,8 @@ module "payments_service_account_role" {
   }
 
   role_policy_arns = {
-    PaymentsDynamoDBTablePolicy = data.terraform_remote_state.payments-api.outputs.payments_dynamodb_table_policy_arn
-    MercadoPagoSecretsReadOnlyPolicy = data.terraform_remote_state.payments-api.outputs.mercado_pago_secrets_read_only_policy_arn
+    //PaymentsDynamoDBTablePolicy = data.terraform_remote_state.payments-api.outputs.payments_dynamodb_table_policy_arn
+    //MercadoPagoSecretsReadOnlyPolicy = data.terraform_remote_state.payments-api.outputs.mercado_pago_secrets_read_only_policy_arn
   }
 
   tags = var.tags
@@ -285,8 +254,8 @@ module "stock_service_account_role" {
   }
 
   role_policy_arns = {
-    StockRDSSecretsReadOnlyPolicy = data.terraform_remote_state.stock-api.outputs.rds_secrets_read_only_policy_arn
-    StockRDSParamsReadOnlyPolicy  = data.terraform_remote_state.stock-api.outputs.rds_params_read_only_policy_arn
+    //StockRDSSecretsReadOnlyPolicy = data.terraform_remote_state.stock-api.outputs.rds_secrets_read_only_policy_arn
+    //StockRDSParamsReadOnlyPolicy  = data.terraform_remote_state.stock-api.outputs.rds_params_read_only_policy_arn
   }
 
   tags = var.tags
