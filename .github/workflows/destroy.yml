@@ -1,7 +1,9 @@
 name: Destroy
 
 on:
-  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
 
 jobs:
   destroy:
