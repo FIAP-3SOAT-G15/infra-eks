@@ -97,7 +97,7 @@ module "eks" {
       capacity_type = "SPOT"
     }
   }
-  
+
   cluster_addons = {
     // Service Discovery
     coredns = {
@@ -264,7 +264,7 @@ module "payments_service_account_role" {
   }
 
   role_policy_arns = {
-    PaymentsDynamoDBTablePolicy = data.terraform_remote_state.payments-api.outputs.payments_dynamodb_table_policy_arn
+    PaymentsDynamoDBTablePolicy      = data.terraform_remote_state.payments-api.outputs.payments_dynamodb_table_policy_arn
     MercadoPagoSecretsReadOnlyPolicy = data.terraform_remote_state.payments-api.outputs.mercado_pago_secrets_read_only_policy_arn
   }
 
