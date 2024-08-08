@@ -60,8 +60,6 @@ spec:
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: live
-            - name: ADMIN_ACCESS_TOKEN
-              value: token
             - name: MOCK_PAYMENT_PROVIDER
               value: "true"
             - name: MP_TOKEN
@@ -84,5 +82,13 @@ spec:
                 secretKeyRef:
                   name: payments-mercado-pago-secrets
                   key: webhookBaseUrl
-            - name: ORDERS_SERVICE_URL
-              value: http://orders.orders
+            - name: COGNITO_ISSUER_URI
+              valueFrom:
+                secretKeyRef:
+                  name: cognito-secrets
+                  key: issuer-uri
+            - name: COGNITO_JWK_SET_URI
+              valueFrom:
+                secretKeyRef:
+                  name: cognito-secrets
+                  key: jwk-set-uri

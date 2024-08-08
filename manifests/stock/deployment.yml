@@ -80,5 +80,13 @@ spec:
                 secretKeyRef:
                   name: stock-db-secrets
                   key: password
-            - name: ADMIN_ACCESS_TOKEN
-              value: token
+            - name: COGNITO_ISSUER_URI
+              valueFrom:
+                secretKeyRef:
+                  name: cognito-secrets
+                  key: issuer-uri
+            - name: COGNITO_JWK_SET_URI
+              valueFrom:
+                secretKeyRef:
+                  name: cognito-secrets
+                  key: jwk-set-uri
