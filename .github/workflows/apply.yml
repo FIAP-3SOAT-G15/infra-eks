@@ -46,3 +46,10 @@ jobs:
           kubectl apply -f orders
           kubectl apply -f payments
           kubectl apply -f stock
+
+      - name: Recreate
+        if: (github.ref == 'refs/heads/main' && github.event_name == 'push') || github.event_name == 'workflow_dispatch'
+        run: |
+          kubectl rollout restart deployment/orders
+          kubectl rollout restart deployment/payments
+          kubectl rollout restart deployment/stock

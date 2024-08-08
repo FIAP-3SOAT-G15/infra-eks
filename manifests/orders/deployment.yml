@@ -80,9 +80,17 @@ spec:
                 secretKeyRef:
                   name: orders-db-secrets
                   key: password
-            - name: ADMIN_ACCESS_TOKEN
-              value: token
             - name: STOCK_SERVICE_URL
               value: http://stock.stock
             - name: PAYMENTS_SERVICE_URL
               value: http://payments.payments
+            - name: COGNITO_ISSUER_URI
+              valueFrom:
+                secretKeyRef:
+                  name: cognito-secrets
+                  key: issuer-uri
+            - name: COGNITO_JWK_SET_URI
+              valueFrom:
+                secretKeyRef:
+                  name: cognito-secrets
+                  key: jwk-set-uri
