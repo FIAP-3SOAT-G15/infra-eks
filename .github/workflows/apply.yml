@@ -50,6 +50,6 @@ jobs:
       - name: Recreate
         if: (github.ref == 'refs/heads/main' && github.event_name == 'push') || github.event_name == 'workflow_dispatch'
         run: |
-          kubectl rollout restart deployment/orders-deployment
-          kubectl rollout restart deployment/payments-deployment
-          kubectl rollout restart deployment/stock-deployment
+          kubectl rollout restart deployment -n orders orders-deployment
+          kubectl rollout restart deployment -n payments payments-deployment
+          kubectl rollout restart deployment -n stock stock-deployment
