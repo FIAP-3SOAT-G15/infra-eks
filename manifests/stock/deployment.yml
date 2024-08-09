@@ -84,9 +84,9 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: cognito-secrets
-                  key: issuer-uri
+                  key: issueruri
             - name: COGNITO_JWK_SET_URI
               valueFrom:
                 secretKeyRef:
                   name: cognito-secrets
-                  key: jwk-set-uri
+                  key: jwkseturi

@@ -9,3 +9,8 @@ variable "tags" {
     managed_by_terraform = true
   }
 }
+
+variable "cognito_policy" {
+  type    = string
+  default = "arn:aws:iam::202062340677:policy/TechChallengeCognitoReadOnlyPolicy"
+}

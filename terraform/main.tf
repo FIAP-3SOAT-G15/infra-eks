@@ -245,6 +245,7 @@ module "orders_service_account_role" {
   role_policy_arns = {
     OrdersRDSSecretsReadOnlyPolicy = data.terraform_remote_state.orders-api.outputs.rds_secrets_read_only_policy_arn
     OrdersRDSParamsReadOnlyPolicy  = data.terraform_remote_state.orders-api.outputs.rds_params_read_only_policy_arn
+    CognitoSecretsReadOnlyPolicy   = var.cognito_policy
   }
 
   tags = var.tags
@@ -266,6 +267,7 @@ module "payments_service_account_role" {
   role_policy_arns = {
     PaymentsDynamoDBTablePolicy      = data.terraform_remote_state.payments-api.outputs.payments_dynamodb_table_policy_arn
     MercadoPagoSecretsReadOnlyPolicy = data.terraform_remote_state.payments-api.outputs.mercado_pago_secrets_read_only_policy_arn
+    CognitoSecretsReadOnlyPolicy     = var.cognito_policy
   }
 
   tags = var.tags
@@ -287,6 +289,7 @@ module "stock_service_account_role" {
   role_policy_arns = {
     StockRDSSecretsReadOnlyPolicy = data.terraform_remote_state.stock-api.outputs.rds_secrets_read_only_policy_arn
     StockRDSParamsReadOnlyPolicy  = data.terraform_remote_state.stock-api.outputs.rds_params_read_only_policy_arn
+    CognitoSecretsReadOnlyPolicy  = var.cognito_policy
   }
 
   tags = var.tags
