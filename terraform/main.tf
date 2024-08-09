@@ -267,7 +267,8 @@ module "payments_service_account_role" {
   role_policy_arns = {
     PaymentsDynamoDBTablePolicy      = data.terraform_remote_state.payments-api.outputs.payments_dynamodb_table_policy_arn
     MercadoPagoSecretsReadOnlyPolicy = data.terraform_remote_state.payments-api.outputs.mercado_pago_secrets_read_only_policy_arn
-    CognitoSecretsReadOnlyPolicy     = var.cognito_policy
+    CognitoSecretsReadOnlyPolicy     = var.cognito_policy,
+    AmazonSQSFullAccess              = "arn:aws:iam::aws:policy/AmazonSQSFullAccess"
   }
 
   tags = var.tags
